@@ -301,13 +301,13 @@ export const wecomProvider: Provider = {
     // 企业微信特有参数：agentid（应用ID）
     // 支持两种方式：
     // 1. 通过URL参数传递：agentid=xxx 或 agent_id=xxx
-    // 2. 通过client_id传递格式：CorpID|AgentID
+    // 2. 通过client_id传递格式：CorpID_AgentID（使用下划线，URL安全）
     let agentId = c.req.query('agentid') || c.req.query('agent_id');
     let actualClientId = clientId;
 
-    // 如果client_id包含|，则解析为CorpID和AgentID
-    if (clientId && clientId.includes('|')) {
-      const parts = clientId.split('|');
+    // 如果client_id包含下划线，则解析为CorpID和AgentID
+    if (clientId && clientId.includes('_')) {
+      const parts = clientId.split('_');
       actualClientId = parts[0];
       agentId = agentId || parts[1];
     }
@@ -357,7 +357,7 @@ export const wecomProvider: Provider = {
     // 校验agentid（企业自建应用必须有agentid）
     if (!agentId) {
       return c.json(
-        { error: 'invalid_request', error_description: 'missing agentid for WeCom login. Please provide agentid via URL parameter or include it in client_id as "CorpID|AgentID"' },
+        { error: 'invalid_request', error_description: 'missing agentid for WeCom login. Please provide agentid via URL parameter or include it in client_id as "CorpID_AgentID"' },
         400,
       );
     }
@@ -411,30 +411,19 @@ export const wecomProvider: Provider = {
       );
     }
 
-    // 1. 解缝合第一重（支持两种格式）
-    // 格式1：clientId|encoded（老格式，client_id只包含CorpID）
-    // 格式2：CorpID|AgentID|encoded（新格式，client_id包含CorpID|AgentID）
-    const parts = wecomState.split('|');
-    if (parts.length < 2) {
+    // 1. 解缝合第一重
+    // state格式：clientId|encoded
+    // 其中clientId可能是 CorpID（老格式）或 CorpID_AgentID（新格式）
+    const lastPipeIdx = wecomState.lastIndexOf('|');
+    if (lastPipeIdx === -1) {
       return c.json(
         { error: 'invalid_request', error_description: 'malformed state' },
         400,
       );
     }
 
-    let clientId: string;
-    let encoded: string;
-
-    if (parts.length === 2) {
-      // 老格式：clientId|encoded
-      clientId = parts[0];
-      encoded = parts[1];
-    } else {
-      // 新格式：CorpID|AgentID|encoded
-      // 重新组合为 clientId|encoded（用于后续验证）
-      clientId = `${parts[0]}|${parts[1]}`;
-      encoded = parts.slice(2).join('|'); // 以防encoded中包含|
-    }
+    const clientId = wecomState.slice(0, lastPipeIdx);
+    const encoded = wecomState.slice(lastPipeIdx + 1);
 
     let downstreamState: DownstreamState;
     try {
@@ -530,10 +519,10 @@ export const wecomProvider: Provider = {
     }
 
     // 5. 解析client_id（可能包含AgentID）
-    // 格式：CorpID 或 CorpID|AgentID
+    // 格式：CorpID 或 CorpID_AgentID（使用下划线，URL安全）
     let corpId = clientId;
-    if (clientId.includes('|')) {
-      corpId = clientId.split('|')[0];
+    if (clientId.includes('_')) {
+      corpId = clientId.split('_')[0];
     }
 
     // 6. 凭证透传：调用企业微信 API
