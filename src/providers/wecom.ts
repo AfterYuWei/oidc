@@ -9,7 +9,8 @@ import { decrementQuota } from '../middleware/quota';
 // 企业微信 OAuth2 端点
 // ============================================================================
 
-const WECOM_AUTHORIZE_URL = 'https://open.weixin.qq.com/connect/oauth2/authorize';
+// 企业微信扫码登录URL（浏览器打开，用企业微信扫码）
+const WECOM_AUTHORIZE_URL = 'https://open.work.weixin.qq.com/wwopen/sso/qrConnect';
 const WECOM_ACCESS_TOKEN_URL = 'https://qyapi.weixin.qq.com/cgi-bin/gettoken';
 const WECOM_USER_INFO_URL = 'https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo';
 const WECOM_USER_DETAIL_URL = 'https://qyapi.weixin.qq.com/cgi-bin/user/get';
@@ -281,6 +282,9 @@ export const wecomProvider: Provider = {
    *
    * 第一重缝合：接收标准 OIDC 参数，将下游上下文缝合到企业微信 state。
    *
+   * 使用企业微信扫码登录接口（浏览器打开，用企业微信扫码）：
+   * https://open.work.weixin.qq.com/wwopen/sso/qrConnect
+   *
    * 关键变化：不再要求 client_secret（标准 OIDC 客户端在授权端点不传此参数）
    */
   async redirectToAuth(c: Context<AppEnv>): Promise<Response> {
@@ -337,18 +341,16 @@ export const wecomProvider: Provider = {
     const encoded = base64urlEncode(JSON.stringify(downstreamState));
     const wecomState = `${clientId}|${encoded}`;
 
-    // 构建企业微信授权 URL（redirect_uri 固定为网关回调地址）
+    // 构建企业微信扫码登录 URL（redirect_uri 固定为网关回调地址）
     const origin = new URL(c.req.url).origin;
     const callbackUrl = `${origin}/${wecomProvider.name}/api/callback`;
     const wecomUrl = new URL(WECOM_AUTHORIZE_URL);
     wecomUrl.searchParams.set('appid', clientId);
     wecomUrl.searchParams.set('redirect_uri', callbackUrl);
-    wecomUrl.searchParams.set('response_type', 'code');
-    wecomUrl.searchParams.set('scope', 'snsapi_privateinfo');
     wecomUrl.searchParams.set('state', wecomState);
+    // 注意：扫码登录不需要 response_type、scope 和 #wechat_redirect 参数
 
-    // 企业微信的授权 URL 需要加上 #wechat_redirect
-    return c.redirect(wecomUrl.toString() + '#wechat_redirect', 302);
+    return c.redirect(wecomUrl.toString(), 302);
   },
 
   /**
