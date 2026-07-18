@@ -33,9 +33,10 @@ oidcRoutes.get('/.well-known/openid-configuration', async (c) => {
   const origin = new URL(c.req.url).origin;
   const baseUrl = `${origin}/${provider}`;
 
+  // issuer 必须包含 provider 路径，否则下游系统无法区分飞书/钉钉/企业微信
   return c.json(
     {
-      issuer: origin,
+      issuer: baseUrl,
       authorization_endpoint: `${baseUrl}/api/auth`,
       token_endpoint: `${baseUrl}/api/token`,
       jwks_uri: `${baseUrl}/.well-known/jwks.json`,

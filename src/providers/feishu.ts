@@ -75,8 +75,12 @@ interface BridgeCodeClaims {
 // 工具函数
 // ============================================================================
 
-function issuerOf(c: Context<AppEnv>): string {
-  return c.env.ISSUER || new URL(c.req.url).origin;
+function issuerOf(c: Context<AppEnv>, provider?: string): string {
+  const base = c.env.ISSUER || new URL(c.req.url).origin;
+  if (provider) {
+    return `${base}/${provider}`;
+  }
+  return base;
 }
 
 function base64UrlEncode(bytes: Uint8Array): string {
@@ -121,7 +125,7 @@ async function signBridgeState(
   const now = Math.floor(Date.now() / 1000);
   return new SignJWT({ ...claims, typ: 'bridge_state' })
     .setProtectedHeader({ alg: 'RS256', kid })
-    .setIssuer(issuerOf(c))
+    .setIssuer(issuerOf(c, 'feishu'))
     .setIssuedAt(now)
     .setExpirationTime(now + BRIDGE_STATE_TTL_SEC)
     .sign(key);
@@ -133,7 +137,7 @@ async function verifyBridgeState(
 ): Promise<BridgeStateClaims> {
   const key = await getPublicKey(c.env.PRIVATE_KEY);
   const { payload } = await jwtVerify(jwt, key, {
-    issuer: issuerOf(c),
+    issuer: issuerOf(c, 'feishu'),
     algorithms: ['RS256'],
   });
   if (payload.typ !== 'bridge_state') {
@@ -151,7 +155,7 @@ async function signBridgeCode(
   const now = Math.floor(Date.now() / 1000);
   return new SignJWT({ ...claims, typ: 'bridge_code' })
     .setProtectedHeader({ alg: 'RS256', kid })
-    .setIssuer(issuerOf(c))
+    .setIssuer(issuerOf(c, 'feishu'))
     .setIssuedAt(now)
     .setExpirationTime(now + BRIDGE_CODE_TTL_SEC)
     .sign(key);
@@ -163,7 +167,7 @@ async function verifyBridgeCode(
 ): Promise<BridgeCodeClaims> {
   const key = await getPublicKey(c.env.PRIVATE_KEY);
   const { payload } = await jwtVerify(jwt, key, {
-    issuer: issuerOf(c),
+    issuer: issuerOf(c, 'feishu'),
     algorithms: ['RS256'],
   });
   if (payload.typ !== 'bridge_code') {
@@ -193,7 +197,7 @@ async function signIdToken(
     picture: claims.picture,
   })
     .setProtectedHeader({ alg: 'RS256', kid })
-    .setIssuer(issuerOf(c))
+    .setIssuer(issuerOf(c, 'feishu'))
     .setSubject(claims.sub)
     .setAudience(claims.aud)
     .setIssuedAt(now)
