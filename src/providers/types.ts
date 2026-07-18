@@ -17,7 +17,7 @@ export interface ProviderUserInfo {
 }
 
 /**
- * 平台“翻译器”接口
+ * 平台"翻译器"接口
  *
  * 每个大厂实现该接口，将私有 OAuth2 流程翻译为标准 OIDC。
  * Step 4 将为飞书完成完整实现，其余渠道保持占位。
@@ -30,6 +30,8 @@ export interface Provider {
   handleCallback(c: Context<AppEnv>): Promise<Response>;
   /** OIDC /token：验证 bridge_code，签发 id_token，扣减配额 */
   exchangeCode(c: Context<AppEnv>): Promise<Response>;
+  /** OIDC /userinfo：用 access_token 获取用户信息 */
+  userinfo(c: Context<AppEnv>): Promise<Response>;
 }
 
 /**

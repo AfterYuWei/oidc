@@ -21,4 +21,7 @@ export const wecomProvider: Provider = {
   async exchangeCode(_c: Context<AppEnv>): Promise<Response> {
     return notImplemented('wecom.exchangeCode');
   },
+  async userinfo(_c: Context<AppEnv>): Promise<Response> {
+    return notImplemented('wecom.userinfo');
+  },
 };

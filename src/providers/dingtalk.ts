@@ -21,4 +21,7 @@ export const dingtalkProvider: Provider = {
   async exchangeCode(_c: Context<AppEnv>): Promise<Response> {
     return notImplemented('dingtalk.exchangeCode');
   },
+  async userinfo(_c: Context<AppEnv>): Promise<Response> {
+    return notImplemented('dingtalk.userinfo');
+  },
 };

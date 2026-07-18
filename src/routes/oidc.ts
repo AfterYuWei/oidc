@@ -39,6 +39,7 @@ oidcRoutes.get('/.well-known/openid-configuration', async (c) => {
       issuer: baseUrl,
       authorization_endpoint: `${baseUrl}/api/auth`,
       token_endpoint: `${baseUrl}/api/token`,
+      userinfo_endpoint: `${baseUrl}/api/userinfo`,
       jwks_uri: `${baseUrl}/.well-known/jwks.json`,
       response_types_supported: ['code'],
       subject_types_supported: ['public'],

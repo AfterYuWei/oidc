@@ -478,8 +478,54 @@ export const feishuProvider: Provider = {
 
     return c.json({
       token_type: 'Bearer',
+      access_token: idToken, // GitLab 需要 access_token 用于 userinfo
       id_token: idToken,
       expires_in: ID_TOKEN_TTL_SEC,
     });
+  },
+
+  /**
+   * GET /feishu/api/userinfo
+   *
+   * OIDC UserInfo 端点：用 access_token 获取用户信息。
+   *
+   * 注意：本实现中 access_token 实际上就是 id_token（简化方案）。
+   *       验证 JWT 签名后返回用户信息。
+   */
+  async userinfo(c: Context<AppEnv>): Promise<Response> {
+    const auth = c.req.header('Authorization');
+    if (!auth?.startsWith('Bearer ')) {
+      return c.json(
+        { error: 'invalid_request', error_description: 'missing Authorization header' },
+        401,
+      );
+    }
+
+    const accessToken = auth.slice(7);
+
+    // 验证 access_token（实际是 id_token）
+    try {
+      const key = await getPublicKey(c.env.PRIVATE_KEY);
+      const { payload } = await jwtVerify(accessToken, key, {
+        issuer: issuerOf(c, 'feishu'),
+        algorithms: ['RS256'],
+      });
+
+      // 返回标准 UserInfo 响应
+      return c.json({
+        sub: payload.sub,
+        name: payload.name,
+        email: payload.email,
+        picture: payload.picture,
+      });
+    } catch (e) {
+      return c.json(
+        {
+          error: 'invalid_token',
+          error_description: e instanceof Error ? e.message : 'token verify failed',
+        },
+        401,
+      );
+    }
   },
 };

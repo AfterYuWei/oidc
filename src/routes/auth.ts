@@ -65,3 +65,20 @@ authRoutes.post('/api/token', async (c) => {
   const provider = getProvider(providerName);
   return provider.exchangeCode(c);
 });
+
+/**
+ * GET /:provider/api/userinfo
+ *
+ * OIDC UserInfo 端点：用 access_token 获取用户信息。
+ *
+ * GitLab 等客户端会在获取 id_token 后调用此端点获取用户详细信息。
+ */
+authRoutes.get('/api/userinfo', async (c) => {
+  const providerName = c.req.param('provider');
+  if (!isValidProvider(providerName)) {
+    return c.json({ error: 'unsupported_provider', provider: providerName }, 400);
+  }
+
+  const provider = getProvider(providerName);
+  return provider.userinfo(c);
+});
