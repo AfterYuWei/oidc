@@ -9,10 +9,11 @@ import { decrementQuota } from '../middleware/quota';
 // 企业微信 OAuth2 端点
 // ============================================================================
 
-// 企业微信扫码登录URL（浏览器打开，用企业微信扫码）
-const WECOM_AUTHORIZE_URL = 'https://open.work.weixin.qq.com/wwopen/sso/qrConnect';
+// 企业微信Web登录URL（新版，浏览器打开，用企业微信扫码）
+const WECOM_AUTHORIZE_URL = 'https://login.work.weixin.qq.com/wwlogin/sso/login';
 const WECOM_ACCESS_TOKEN_URL = 'https://qyapi.weixin.qq.com/cgi-bin/gettoken';
-const WECOM_USER_INFO_URL = 'https://qyapi.weixin.qq.com/cgi-bin/user/getuserinfo';
+// Web登录专用接口（返回userid或openid）
+const WECOM_AUTH_USER_INFO_URL = 'https://qyapi.weixin.qq.com/cgi-bin/auth/getuserinfo';
 const WECOM_USER_DETAIL_URL = 'https://qyapi.weixin.qq.com/cgi-bin/user/get';
 
 // ============================================================================
@@ -63,11 +64,15 @@ interface WecomAccessToken {
   errmsg?: string;
 }
 
-interface WecomUserId {
-  UserId?: string;
-  OpenId?: string;
+// Web登录返回的用户身份（新版接口）
+interface WecomAuthUserInfo {
   errcode?: number;
   errmsg?: string;
+  // 企业成员
+  userid?: string;
+  // 非企业成员
+  openid?: string;
+  external_userid?: string;
 }
 
 interface WecomUserInfo {
@@ -194,28 +199,23 @@ async function fetchAccessToken(
   return data.access_token;
 }
 
-async function fetchUserId(
+async function fetchAuthUserInfo(
   accessToken: string,
   code: string,
-): Promise<string> {
-  const url = new URL(WECOM_USER_INFO_URL);
+): Promise<WecomAuthUserInfo> {
+  const url = new URL(WECOM_AUTH_USER_INFO_URL);
   url.searchParams.set('access_token', accessToken);
   url.searchParams.set('code', code);
 
   const resp = await fetch(url.toString(), { method: 'GET' });
   if (!resp.ok) {
-    throw new Error(`wecom getuserinfo HTTP ${resp.status}`);
+    throw new Error(`wecom auth/getuserinfo HTTP ${resp.status}`);
   }
-  const data = (await resp.json()) as WecomUserId;
+  const data = (await resp.json()) as WecomAuthUserInfo;
   if (data.errcode && data.errcode !== 0) {
-    throw new Error(`wecom getuserinfo errcode=${data.errcode} errmsg=${data.errmsg}`);
+    throw new Error(`wecom auth/getuserinfo errcode=${data.errcode} errmsg=${data.errmsg}`);
   }
-  // 企业微信返回 UserId 或 OpenId，优先使用 UserId（企业成员）
-  const userId = data.UserId || data.OpenId;
-  if (!userId) {
-    throw new Error('wecom getuserinfo missing UserId/OpenId');
-  }
-  return userId;
+  return data;
 }
 
 async function fetchUserInfo(
@@ -282,8 +282,10 @@ export const wecomProvider: Provider = {
    *
    * 第一重缝合：接收标准 OIDC 参数，将下游上下文缝合到企业微信 state。
    *
-   * 使用企业微信扫码登录接口（浏览器打开，用企业微信扫码）：
-   * https://open.work.weixin.qq.com/wwopen/sso/qrConnect
+   * 使用企业微信Web登录组件（新版接口，浏览器打开，用企业微信扫码）：
+   * https://login.work.weixin.qq.com/wwlogin/sso/login
+   *
+   * 文档：https://developer.work.weixin.qq.com/document/path/98152
    *
    * 关键变化：不再要求 client_secret（标准 OIDC 客户端在授权端点不传此参数）
    */
@@ -341,14 +343,14 @@ export const wecomProvider: Provider = {
     const encoded = base64urlEncode(JSON.stringify(downstreamState));
     const wecomState = `${clientId}|${encoded}`;
 
-    // 构建企业微信扫码登录 URL（redirect_uri 固定为网关回调地址）
+    // 构建企业微信Web登录 URL（redirect_uri 固定为网关回调地址）
     const origin = new URL(c.req.url).origin;
     const callbackUrl = `${origin}/${wecomProvider.name}/api/callback`;
     const wecomUrl = new URL(WECOM_AUTHORIZE_URL);
+    wecomUrl.searchParams.set('login_type', 'CorpApp'); // 企业自建/代开发应用登录
     wecomUrl.searchParams.set('appid', clientId);
     wecomUrl.searchParams.set('redirect_uri', callbackUrl);
     wecomUrl.searchParams.set('state', wecomState);
-    // 注意：扫码登录不需要 response_type、scope 和 #wechat_redirect 参数
 
     return c.redirect(wecomUrl.toString(), 302);
   },
@@ -482,13 +484,19 @@ export const wecomProvider: Provider = {
     // 5. 凭证透传：调用企业微信 API
     // 注意：wecom_code 只能使用一次，重试会报错（企业微信标准行为）
     let accessToken: string;
-    let userId: string;
-    let userInfo: WecomUserInfo;
+    let authUserInfo: WecomAuthUserInfo;
+    let userInfo: WecomUserInfo | undefined;
     try {
-      // 企业微信流程：先获取 access_token，再获取 userId，最后获取用户详细信息
+      // 企业微信Web登录流程：
+      // 1. 获取 access_token（使用 corpid 和 corpsecret）
       accessToken = await fetchAccessToken(clientId, clientSecret);
-      userId = await fetchUserId(accessToken, packed.wecom_code);
-      userInfo = await fetchUserInfo(accessToken, userId);
+      // 2. 获取用户身份（返回 userid 或 openid）
+      authUserInfo = await fetchAuthUserInfo(accessToken, packed.wecom_code);
+
+      // 3. 如果是企业成员（有userid），获取详细信息
+      if (authUserInfo.userid) {
+        userInfo = await fetchUserInfo(accessToken, authUserInfo.userid);
+      }
     } catch (e) {
       return c.json(
         {
@@ -498,18 +506,21 @@ export const wecomProvider: Provider = {
         502,
       );
     }
-    if (!userInfo.userid) {
-      return c.json({ error: 'invalid_grant', error_description: 'no userid' }, 502);
+
+    // 6. 确定用户唯一标识（企业成员用userid，非企业成员用openid）
+    const userId = authUserInfo.userid || authUserInfo.openid;
+    if (!userId) {
+      return c.json({ error: 'invalid_grant', error_description: 'no userid or openid' }, 502);
     }
 
-    // 6. 签发 id_token（使用 nonce）
+    // 7. 签发 id_token（使用 nonce）
     const idToken = await signIdToken(c, {
-      sub: userInfo.userid,
+      sub: userId,
       aud: clientId,
       nonce: packed.nonce,
-      name: userInfo.name,
-      email: userInfo.email,
-      picture: userInfo.avatar,
+      name: userInfo?.name,
+      email: userInfo?.email,
+      picture: userInfo?.avatar,
     });
 
     // 7. 扣减配额
