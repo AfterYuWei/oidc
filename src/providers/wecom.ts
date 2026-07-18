@@ -38,6 +38,7 @@ interface DownstreamState {
   nonce: string;
   scope: string;
   code_challenge?: string;
+  agentid?: string; // 企业微信特有：应用ID
 }
 
 /**
@@ -297,6 +298,8 @@ export const wecomProvider: Provider = {
     const state = c.req.query('state') || '';
     const nonce = c.req.query('nonce') || '';
     const codeChallenge = c.req.query('code_challenge');
+    // 企业微信特有参数：agentid（应用ID）
+    const agentId = c.req.query('agentid') || c.req.query('agent_id');
 
     // 必填校验（不要求 client_secret）
     if (!clientId) {
@@ -339,6 +342,7 @@ export const wecomProvider: Provider = {
       nonce,
       scope,
       ...(codeChallenge && { code_challenge: codeChallenge }),
+      ...(agentId && { agentid: agentId }),
     };
     const encoded = base64urlEncode(JSON.stringify(downstreamState));
     const wecomState = `${clientId}|${encoded}`;
@@ -351,6 +355,10 @@ export const wecomProvider: Provider = {
     wecomUrl.searchParams.set('appid', clientId);
     wecomUrl.searchParams.set('redirect_uri', callbackUrl);
     wecomUrl.searchParams.set('state', wecomState);
+    // 添加agentid参数（企业自建应用需要）
+    if (agentId) {
+      wecomUrl.searchParams.set('agentid', agentId);
+    }
 
     return c.redirect(wecomUrl.toString(), 302);
   },
