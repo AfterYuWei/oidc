@@ -1,4 +1,4 @@
-name = "oidc-bridge"
+name = "oidc"
 main = "src/index.ts"
 compatibility_date = "2026-07-18"
 
@@ -21,5 +21,5 @@ ISSUER = ""
 # 并将下方 id 替换为返回的 namespace id
 # ============================================================================
 [[kv_namespaces]]
-binding = "QUOTA_KV"
+binding = "OIDC_QUOTA_STORE"
 id = "dc5e413c00474100ba04481f91f6475a"
