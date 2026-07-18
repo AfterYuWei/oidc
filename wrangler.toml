@@ -1,0 +1,25 @@
+name = "oidc-bridge"
+main = "src/index.ts"
+compatibility_date = "2026-07-18"
+
+# 纯 Web Crypto API 运行时，jose 不依赖 node:crypto，无需 nodejs_compat
+compatibility_flags = []
+
+# ============================================================================
+# 环境变量 / Secrets
+# ============================================================================
+# PRIVATE_KEY: RS256 PKCS8 PEM 私钥（通过 `wrangler secret put PRIVATE_KEY` 注入）
+#   生成方式（必须为 PKCS8 格式，crypto.subtle.importKey 要求）:
+#     openssl genrsa 2048 | openssl pkcs8 -topk8 -nocrypt -out private.pem
+# ISSUER:     可选，JWT iss 声明，缺省时使用请求的 origin
+[vars]
+ISSUER = ""
+
+# ============================================================================
+# Cloudflare KV —— 仅用于按大厂 App ID 扣减登录配额（Step 3 启用）
+# 部署前请先创建命名空间: wrangler kv namespace create QUOTA_KV
+# 并将下方 id 替换为返回的 namespace id
+# ============================================================================
+[[kv_namespaces]]
+binding = "QUOTA_KV"
+id = "dc5e413c00474100ba04481f91f6475a"
