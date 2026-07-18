@@ -411,16 +411,30 @@ export const wecomProvider: Provider = {
       );
     }
 
-    // 1. 解缝合第一重
-    const pipeIdx = wecomState.indexOf('|');
-    if (pipeIdx === -1) {
+    // 1. 解缝合第一重（支持两种格式）
+    // 格式1：clientId|encoded（老格式，client_id只包含CorpID）
+    // 格式2：CorpID|AgentID|encoded（新格式，client_id包含CorpID|AgentID）
+    const parts = wecomState.split('|');
+    if (parts.length < 2) {
       return c.json(
         { error: 'invalid_request', error_description: 'malformed state' },
         400,
       );
     }
-    const clientId = wecomState.slice(0, pipeIdx);
-    const encoded = wecomState.slice(pipeIdx + 1);
+
+    let clientId: string;
+    let encoded: string;
+
+    if (parts.length === 2) {
+      // 老格式：clientId|encoded
+      clientId = parts[0];
+      encoded = parts[1];
+    } else {
+      // 新格式：CorpID|AgentID|encoded
+      // 重新组合为 clientId|encoded（用于后续验证）
+      clientId = `${parts[0]}|${parts[1]}`;
+      encoded = parts.slice(2).join('|'); // 以防encoded中包含|
+    }
 
     let downstreamState: DownstreamState;
     try {
@@ -515,7 +529,14 @@ export const wecomProvider: Provider = {
       );
     }
 
-    // 5. 凭证透传：调用企业微信 API
+    // 5. 解析client_id（可能包含AgentID）
+    // 格式：CorpID 或 CorpID|AgentID
+    let corpId = clientId;
+    if (clientId.includes('|')) {
+      corpId = clientId.split('|')[0];
+    }
+
+    // 6. 凭证透传：调用企业微信 API
     // 注意：wecom_code 只能使用一次，重试会报错（企业微信标准行为）
     let accessToken: string;
     let authUserInfo: WecomAuthUserInfo;
@@ -523,7 +544,7 @@ export const wecomProvider: Provider = {
     try {
       // 企业微信Web登录流程：
       // 1. 获取 access_token（使用 corpid 和 corpsecret）
-      accessToken = await fetchAccessToken(clientId, clientSecret);
+      accessToken = await fetchAccessToken(corpId, clientSecret);
       // 2. 获取用户身份（返回 userid 或 openid）
       authUserInfo = await fetchAuthUserInfo(accessToken, packed.wecom_code);
 
@@ -541,13 +562,13 @@ export const wecomProvider: Provider = {
       );
     }
 
-    // 6. 确定用户唯一标识（企业成员用userid，非企业成员用openid）
+    // 7. 确定用户唯一标识（企业成员用userid，非企业成员用openid）
     const userId = authUserInfo.userid || authUserInfo.openid;
     if (!userId) {
       return c.json({ error: 'invalid_grant', error_description: 'no userid or openid' }, 502);
     }
 
-    // 7. 签发 id_token（使用 nonce）
+    // 8. 签发 id_token（使用 nonce）
     const idToken = await signIdToken(c, {
       sub: userId,
       aud: clientId,
@@ -557,7 +578,7 @@ export const wecomProvider: Provider = {
       picture: userInfo?.avatar,
     });
 
-    // 7. 扣减配额
+    // 9. 扣减配额
     await decrementQuota(c.env.OIDC_QUOTA_STORE, clientId);
 
     return c.json({
