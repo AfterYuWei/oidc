@@ -299,7 +299,18 @@ export const wecomProvider: Provider = {
     const nonce = c.req.query('nonce') || '';
     const codeChallenge = c.req.query('code_challenge');
     // 企业微信特有参数：agentid（应用ID）
-    const agentId = c.req.query('agentid') || c.req.query('agent_id');
+    // 支持两种方式：
+    // 1. 通过URL参数传递：agentid=xxx 或 agent_id=xxx
+    // 2. 通过client_id传递格式：CorpID|AgentID
+    let agentId = c.req.query('agentid') || c.req.query('agent_id');
+    let actualClientId = clientId;
+
+    // 如果client_id包含|，则解析为CorpID和AgentID
+    if (clientId && clientId.includes('|')) {
+      const parts = clientId.split('|');
+      actualClientId = parts[0];
+      agentId = agentId || parts[1];
+    }
 
     // 必填校验（不要求 client_secret）
     if (!clientId) {
@@ -335,6 +346,22 @@ export const wecomProvider: Provider = {
       );
     }
 
+    // 确保actualClientId有值（TypeScript类型检查）
+    if (!actualClientId) {
+      return c.json(
+        { error: 'invalid_request', error_description: 'missing client_id' },
+        400,
+      );
+    }
+
+    // 校验agentid（企业自建应用必须有agentid）
+    if (!agentId) {
+      return c.json(
+        { error: 'invalid_request', error_description: 'missing agentid for WeCom login. Please provide agentid via URL parameter or include it in client_id as "CorpID|AgentID"' },
+        400,
+      );
+    }
+
     // 第一重缝合：将下游上下文编码为 Base64URL
     const downstreamState: DownstreamState = {
       redirect_uri: redirectUri,
@@ -342,7 +369,7 @@ export const wecomProvider: Provider = {
       nonce,
       scope,
       ...(codeChallenge && { code_challenge: codeChallenge }),
-      ...(agentId && { agentid: agentId }),
+      agentid: agentId,
     };
     const encoded = base64urlEncode(JSON.stringify(downstreamState));
     const wecomState = `${clientId}|${encoded}`;
@@ -351,14 +378,13 @@ export const wecomProvider: Provider = {
     const origin = new URL(c.req.url).origin;
     const callbackUrl = `${origin}/${wecomProvider.name}/api/callback`;
     const wecomUrl = new URL(WECOM_AUTHORIZE_URL);
-    wecomUrl.searchParams.set('login_type', 'CorpApp'); // 企业自建/代开发应用登录
-    wecomUrl.searchParams.set('appid', clientId);
+
+    // 企业自建/代开发应用登录
+    wecomUrl.searchParams.set('login_type', 'CorpApp');
+    wecomUrl.searchParams.set('appid', actualClientId);
+    wecomUrl.searchParams.set('agentid', agentId);
     wecomUrl.searchParams.set('redirect_uri', callbackUrl);
     wecomUrl.searchParams.set('state', wecomState);
-    // 添加agentid参数（企业自建应用需要）
-    if (agentId) {
-      wecomUrl.searchParams.set('agentid', agentId);
-    }
 
     return c.redirect(wecomUrl.toString(), 302);
   },
