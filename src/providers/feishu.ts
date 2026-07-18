@@ -516,7 +516,7 @@ export const feishuProvider: Provider = {
     });
 
     // 5. ★ 在 id_token 签发成功的最后一瞬间扣减配额
-    await decrementQuota(c.env.QUOTA_KV, claims.client_id);
+    await decrementQuota(c.env.OIDC_QUOTA_STORE, claims.client_id);
 
     return c.json({
       token_type: 'Bearer',

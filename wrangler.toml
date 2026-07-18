@@ -17,7 +17,7 @@ ISSUER = ""
 
 # ============================================================================
 # Cloudflare KV —— 仅用于按大厂 App ID 扣减登录配额（Step 3 启用）
-# 部署前请先创建命名空间: wrangler kv namespace create QUOTA_KV
+# 部署前请先创建命名空间: wrangler kv namespace create OIDC_QUOTA_STORE
 # 并将下方 id 替换为返回的 namespace id
 # ============================================================================
 [[kv_namespaces]]

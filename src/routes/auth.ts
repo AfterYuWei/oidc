@@ -30,7 +30,7 @@ authRoutes.get('/api/auth', quotaMiddleware(), async (c) => {
  * 大厂回调：验证 bridge_state -> 换取飞书用户信息 -> 签发 bridge_code -> 302 回下游
  *
  * 安全约束：bridge_state 中的 client_secret 仅在内存中用于本次请求的大厂接口调用，
- *           请求结束即随 isolate 上下文释放，绝不写入 QUOTA_KV 或日志。
+ *           请求结束即随 isolate 上下文释放，绝不写入 OIDC_QUOTA_STORE 或日志。
  *
  * 注意：本端点只签发 bridge_code（标准 OIDC code），不签发 id_token、不扣配额。
  *       id_token 签发与 decrementQuota 在 /api/token 完成下游换码后执行。

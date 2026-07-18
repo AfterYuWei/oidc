@@ -27,11 +27,11 @@ export const quotaMiddleware = (): MiddlewareHandler<AppEnv> => {
     }
 
     const kvKey = `quota:${clientId}`;
-    const currentStr = await c.env.QUOTA_KV.get(kvKey);
+    const currentStr = await c.env.OIDC_QUOTA_STORE.get(kvKey);
 
     if (currentStr === null) {
       // 新用户初次访问：免注册，直接赠送免费额度
-      await c.env.QUOTA_KV.put(kvKey, String(DEFAULT_FREE_QUOTA));
+      await c.env.OIDC_QUOTA_STORE.put(kvKey, String(DEFAULT_FREE_QUOTA));
     } else {
       const current = parseInt(currentStr, 10);
       if (Number.isNaN(current) || current <= 0) {
