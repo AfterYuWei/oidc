@@ -344,7 +344,7 @@ export const wecomProvider: Provider = {
     wecomUrl.searchParams.set('appid', clientId);
     wecomUrl.searchParams.set('redirect_uri', callbackUrl);
     wecomUrl.searchParams.set('response_type', 'code');
-    wecomUrl.searchParams.set('scope', 'snsapi_base');
+    wecomUrl.searchParams.set('scope', 'snsapi_privateinfo');
     wecomUrl.searchParams.set('state', wecomState);
 
     // 企业微信的授权 URL 需要加上 #wechat_redirect
