@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import type { AppEnv } from './types';
 import { oidcRoutes } from './routes/oidc';
 import { authRoutes } from './routes/auth';
+import { docsHandler } from './routes/docs';
+import { faviconHandler } from './routes/favicon';
 
 /**
  * oidc-bridge
@@ -11,8 +13,11 @@ import { authRoutes } from './routes/auth';
  */
 const app = new Hono<AppEnv>();
 
-// 根路径重定向到官网
-app.get('/', (c) => c.redirect('https://oidc.com', 302));
+// 根路径返回自描述 API 文档
+app.get('/', docsHandler);
+
+// 标签页图标
+app.get('/favicon.svg', faviconHandler);
 
 // Step 2: OIDC 公开端点（JWKS）
 app.route('/:provider', oidcRoutes);
