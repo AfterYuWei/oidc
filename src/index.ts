@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import type { AppEnv } from './types';
 import { oidcRoutes } from './routes/oidc';
 import { authRoutes } from './routes/auth';
-import { listProviders } from './providers';
 
 /**
  * oidc-bridge
@@ -12,20 +11,8 @@ import { listProviders } from './providers';
  */
 const app = new Hono<AppEnv>();
 
-// 健康检查 / 自描述
-app.get('/', (c) =>
-  c.json({
-    service: 'oidc-bridge',
-    status: 'ok',
-    providers: listProviders(),
-    endpoints: {
-      jwks: '/:provider/.well-known/jwks.json',
-      auth: '/:provider/api/auth',
-      callback: '/:provider/api/callback',
-      token: '/:provider/api/token',
-    },
-  }),
-);
+// 根路径重定向到官网
+app.get('/', (c) => c.redirect('https://oidc.com', 302));
 
 // Step 2: OIDC 公开端点（JWKS）
 app.route('/:provider', oidcRoutes);
